@@ -1,0 +1,212 @@
+import React, { useState } from "react";
+import axios from "axios";
+import styles from "./style.module.css";
+
+const GalleryForm = () => {
+  const [formValues, setFormValues] = useState({
+    name: "",
+    photos: [],
+  });
+
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormValues({
+      ...formValues,
+      [name]: value,
+    });
+  };
+
+  const handlePhotosChange = (e) => {
+    const files = Array.from(e.target.files);
+    setFormValues({
+      ...formValues,
+      photos: files,
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setLoading(true);
+  
+    const formData = new FormData();
+    formData.append("name", formValues.name);
+    formValues.photos.forEach((photo) => {
+      formData.append("photos", photo);
+    });
+  
+    axios.post("http://localhost:5000/api/albums", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    })
+    .then((response) => {
+      setSuccessMessage("Upload successful!");
+      setErrorMessage("");
+      setFormValues({
+        name: "",
+        photos: [],
+      });
+    })
+    .catch((error) => {
+      setSuccessMessage("");
+      setErrorMessage("Error uploading data.");
+      console.error(error.response ? error.response.data : error.message);
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+  };
+  
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.title}>Album Upload</div>
+      <form onSubmit={handleSubmit} className={styles.forms}>
+        <div>
+          <input
+            type="text"
+            name="name"
+            value={formValues.name}
+            onChange={handleInputChange}
+            placeholder="Album Name"
+            required
+            className={styles.nameInput}
+          />
+        </div>
+        <div>
+          <input
+            type="file"
+            name="photos"
+            onChange={handlePhotosChange}
+            multiple
+          />
+        </div>
+        <button type="submit" className={styles.reg} disabled={loading}>
+          {loading ? "Uploading..." : "Upload"}
+        </button>
+        {successMessage && (
+          <div className={styles.successMessage}>{successMessage}</div>
+        )}
+        {errorMessage && (
+          <div className={styles.errorMessage}>{errorMessage}</div>
+        )}
+      </form>
+    </div>
+  );
+};
+
+export default GalleryForm;
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+require('dotenv').config();
+
+// Import routes
+const dataRoutes = require('./routes/dataRoutes');
+const albumRoutes = require('./routes/albumRoutes'); // Import album routes
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files (uploads)
+app.use('/uploads', express.static('uploads'));
+
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => {
+    console.log('Connected to MongoDB');
+  })
+  .catch(err => {
+    console.error('Error connecting to MongoDB:', err);
+  });
+
+// Use routes
+app.use('/api/data', dataRoutes); // Data routes
+app.use('/api/albums', albumRoutes); // Album routes
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+// routes/albumRoutes.js
+const express = require('express');
+const { createAlbum, getAlbums } = require('../controllers/albumController');
+const multer = require('multer');
+const router = express.Router();
+
+// Set up storage for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// Handle multiple file uploads for photos
+router.post('/', upload.fields('photos', 10), createAlbum); // Adjust maxCount as needed
+router.get('/', getAlbums);
+
+module.exports = router;
+// controllers/albumController.js
+const Album = require('../models/albumModel');
+
+exports.createAlbum = async (req, res) => {
+  try {
+    console.log('Files:', req.files); // Log the uploaded files
+
+    const { name } = req.body;
+    const photos = req.files['photos'] ? req.files['photos'].map(file => ({ url: `/uploads/${file.filename}` })) : [];
+
+    const newAlbum = new Album({
+      name,
+      photos: photos
+    });
+
+    await newAlbum.save();
+    res.status(201).json(newAlbum);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.getAlbums = async (req, res) => {
+  try {
+    const albums = await Album.find();
+    res.status(200).json(albums);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+// models/albumModel.js
+const mongoose = require('mongoose');
+
+// Define the schema for images
+const photoSchema = new mongoose.Schema({
+  url: { type: String, required: true }
+}, { _id: false });
+
+const albumSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  photos: [photoSchema] // Array of photoSchema objects
+}, { collection: 'albums' }); // Define the collection name for albums
+
+module.exports = mongoose.model('Album', albumSchema);
+PORT=5000
+MONGODB_URI=mongodb+srv://kevinkakhidze:kevin112358@cluster0.ghlt385.mongodb.net/dinamo

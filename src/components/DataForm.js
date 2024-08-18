@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import styles from "./style.module.css";
+import styles from "./alfa.module.css";
 
 const DataForm = () => {
   const [formValues, setFormValues] = useState({
